@@ -1,0 +1,281 @@
+---
+title: "Week 2 Assignment"
+author: "Haoming Chen"
+date: "2026-02-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+This assignment uses time series graphics from the fpp3 framework to explore key features such as trend, seasonality, cyclicity, and unusual observations. The goal is to understand the series in the real-world datasets from economics, health and energy.
+
+```{r warning=FALSE, message=FALSE}
+library(fpp3)
+library(tidyverse)
+library(USgas)
+library(readxl)
+```
+
+## 2.1
+
+### 1. Bricks from aus_production
+
+```{r}
+bricks <- aus_production %>%
+  select(Quarter, Bricks) %>%
+  drop_na()
+```
+
+```{r}
+#plot bricks
+autoplot(bricks, Bricks) +
+  labs(
+    title = "Bricks Production in Australia",
+    x = "Quarter",
+    y = "Bricks",
+  ) 
+```
+
+### 2. Lynx from Pelt
+
+```{r}
+lynx <- pelt %>%
+  select(Year, Lynx) %>%
+  drop_na()
+```
+
+```{r}
+autoplot(lynx, Lynx) +
+  labs(
+    title = "Canadian Lynx Trappings",
+    x = "Year",
+    y = "Number of Lynx"
+  )
+```
+
+### 3. Close from gafa_stock
+
+```{r}
+goog_close <- gafa_stock %>%
+  filter(Symbol == "GOOG") %>%
+  select(Date, Close) %>%
+  drop_na()
+```
+
+```{r}
+autoplot(goog_close, Close) +
+  labs(
+    title = "GOOG Stock Closing Price",
+    x = "Date",
+    y = "Close Price in USD"
+  )
+```
+
+### 4. Demand from vic_elec
+
+```{r}
+demand <- vic_elec %>%
+  select(Time, Demand) %>%
+  drop_na()
+```
+
+```{r}
+autoplot(demand, Demand) +
+  labs(
+    title = "Electricity Demand in Victoria",
+    x = "Time",
+    y = "Demand"
+  )
+```
+## 2.2
+
+```{r}
+unique(gafa_stock$Symbol)
+# check the unique symbol
+
+peak_days <- gafa_stock %>%
+  group_by(Symbol) %>%
+  filter(Close == max(Close, na.rm=TRUE)) %>%
+  select(Symbol, Date, Close)
+
+peak_days
+```
+
+## 2.3
+
+```{r}
+tute1 <- read.csv("https://raw.githubusercontent.com/vincent-usny/week2/refs/heads/main/tute1.csv")
+view(tute1)
+```
+
+```{r}
+mytimeseries <- tute1 |>
+  mutate(Quarter = yearquarter(Quarter)) |>
+  as_tsibble(index = Quarter)
+```
+
+```{r}
+mytimeseries |>
+  pivot_longer(-Quarter) |>
+  ggplot(aes(x = Quarter, y = value, colour = name)) +
+  geom_line() 
+```
+**Without facet_grid(), all time series will be in one grid.  Using facet_grid() is easier to identify each time series.**
+
+## 2.4
+
+```{r}
+?us_total
+head(us_total)
+```
+
+```{r}
+us_total_ts <- us_total %>%
+  as_tsibble(
+    index = year,
+    key = state
+  )
+```
+
+```{r}
+new_england <- c("Maine", "Vermont", "New Hampshire",
+                 "Massachusetts", "Connecticut", "Rhode Island")
+
+us_new_england <- us_total_ts %>%
+  filter(state %in% new_england)
+```
+
+```{r}
+autoplot(us_new_england, y) +
+  labs(
+    title = "Annual Gas Consumption in New England",
+    x = "Year",
+    y = "Consumption"
+  )
+```
+
+
+## 2.5
+
+```{r}
+#a
+download.file(
+  url = "https://github.com/vincent-usny/week2/raw/main/tourism.xlsx",
+  destfile = "tourism.xlsx",
+  mode = "wb"
+)
+
+tourism <-read_excel("tourism.xlsx")
+head(tourism)
+```
+
+```{r}
+#b
+tourism_ts <- tourism %>%
+  mutate(Quarter = yearquarter(Quarter)) %>%
+  as_tsibble(
+    index = Quarter,
+    key = c(State, Region, Purpose)
+  )
+
+tourism_ts
+```
+
+```{r warning=FALSE}
+#c
+max_avg <- tourism_ts %>%
+  group_by(Region, Purpose) %>%
+  summarise(avg_trips = mean(Trips, na.rm=TRUE)) %>%
+  arrange(desc(avg_trips)) %>%
+  slice(1)
+```
+
+```{r}
+#d
+tourism_state <- tourism_ts %>%
+  index_by(Quarter) %>%
+  group_by(State) %>%
+  summarise(TotalTrips = sum(Trips, na.rm = TRUE)) %>%
+  ungroup() %>%
+  as_tsibble(index = Quarter, key = State)
+
+tourism_state
+```
+
+## 2.8
+
+```{r}
+#1. Total Private
+us_private <- us_employment %>%
+  filter(Title == "Total Private") %>%
+  select(Month, Employed)
+
+autoplot(us_private, Employed)
+gg_season(us_private, Employed)
+gg_subseries(us_private, Employed)
+gg_lag(us_private, Employed, lag=12)
+ACF(us_private, Employed)
+```
+
+```{r}
+#2. Bricks
+bricks <- aus_production %>%
+  select(Quarter, Bricks) %>%
+  drop_na(Bricks)
+
+autoplot(bricks, Bricks)
+gg_season(bricks, Bricks)
+gg_subseries(bricks, Bricks)
+gg_lag(bricks, Bricks, lag = 4)
+ACF(bricks, Bricks)
+```
+
+```{r}
+#3. Hare
+hare <- pelt %>%
+  select(Year, Hare)
+
+autoplot(hare, Hare)
+gg_lag(hare, Hare, lag = 1)
+ACF(hare, Hare)
+```
+
+```{r}
+#4. PBS HO2
+pbs_h02 <- PBS %>%
+  filter(
+      ATC1 == "H",
+      ATC2 == "H02", 
+      Concession == "General",
+      Type == "Co-payments") %>%
+  select(Month, Cost)
+
+autoplot(pbs_h02, Cost)
+gg_season(pbs_h02, Cost)
+gg_subseries(pbs_h02, Cost)
+gg_lag(pbs_h02, Cost, lag = 12)
+ACF(pbs_h02, Cost)
+```
+
+```{r}
+#5. Gasoline
+gasoline <- us_gasoline %>%
+  select(Week, Barrels)
+
+autoplot(gasoline, Barrels)
+gg_season(gasoline, Barrels)
+gg_subseries(gasoline, Barrels)
+gg_lag(gasoline, Barrels, lag = 52)
+ACF(gasoline, Barrels)
+```
+
+**Seasonality is strong is total private employment, PBS H02 cost and US gasoline, but none in Hare. Hare is strong in cyclicity. Employment and PBS costs show strong upward trend. Employment and gasoline peak in specific seasons each year. Unusual years vary in each session.**
+
+# Summary
+
+The analysis shows that many series have strong trends and seasonal patterns, especially employment, pharmaceutical costs, and gasoline consumption. rick production displays seasonal behavior with long-term decline, while hare pelts show clear multi-year cycles without seasonality.
+
